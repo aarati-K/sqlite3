@@ -140,6 +140,10 @@ USE_GCOV = @USE_GCOV@
 LTCOMPILE_EXTRAS += $(GCOV_CFLAGS$(USE_GCOV))
 LTLINK_EXTRAS += $(GCOV_LDFLAGS$(USE_GCOV))
 
+# For creating the .a file
+#
+AR = ar cr
+RANLIB = ranlib
 
 # The directory into which to store package information for
 
@@ -601,7 +605,7 @@ DBFUZZ_OPT =
 # This is the default Makefile target.  The objects listed here
 # are what get build when you type just "make" with no arguments.
 #
-all:	sqlite3.h libsqlite3.la sqlite3$(TEXE) $(HAVE_TCL:1=libtclsqlite3.la)
+all:	sqlite3.h libsqlite3.la libsqlite3.a sqlite3$(TEXE) $(HAVE_TCL:1=libtclsqlite3.la)
 
 Makefile: $(TOP)/Makefile.in
 	./config.status
@@ -612,6 +616,10 @@ sqlite3.pc: $(TOP)/sqlite3.pc.in
 libsqlite3.la:	$(LIBOBJ)
 	$(LTLINK) -no-undefined -o $@ $(LIBOBJ) $(TLIBS) \
 		${ALLOWRELEASE} -rpath "$(libdir)" -version-info "8:6:8"
+
+libsqlite3.a: $(LIBOBJ)
+	$(AR) libsqlite3.a $(LIBOBJ)
+	$(RANLIB) libsqlite3.a
 
 libtclsqlite3.la:	tclsqlite.lo libsqlite3.la
 	$(LTLINK) -no-undefined -o $@ tclsqlite.lo \
