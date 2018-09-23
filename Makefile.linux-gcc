@@ -38,8 +38,8 @@ THREADSAFE = -DTHREADSAFE=0
 #### Specify any extra linker options needed to make the library
 #    thread safe
 #
-#THREADLIB = -lpthread
-THREADLIB = 
+THREADLIB = -lpthread
+# THREADLIB = 
 
 #### Specify any extra libraries needed to access required functions.
 #
@@ -110,13 +110,13 @@ TCLOBJ = tclsqlite.o
 
 #### Compiler options needed for programs that use the readline() library.
 #
-READLINE_FLAGS =
-#READLINE_FLAGS = -DHAVE_READLINE=1 -I/usr/include/readline
+# READLINE_FLAGS =
+READLINE_FLAGS = -DHAVE_READLINE=1 -I/usr/include/readline
 
 #### Linker options needed by programs using readline() must link against.
 #
-LIBREADLINE =
-#LIBREADLINE = -static -lreadline -ltermcap
+# LIBREADLINE = -ldl
+LIBREADLINE = -static -lreadline -ltermcap -ldl
 
 # You should not have to change anything below this line
 ###############################################################################
