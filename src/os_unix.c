@@ -85,6 +85,13 @@
 #endif
 
 /*
+* To limit in-memory buffer in experiments
+* For normal operation, should be set to 0
+*/
+#define USE_DIRECT_IO 1
+#define KB 1024
+
+/*
 ** standard include files.
 */
 #include <sys/types.h>
@@ -255,6 +262,8 @@ struct unixFile {
   */
   char aPadding[32];
 #endif
+  /*1 for the db file, 0 for everything else (journal file, etc)*/
+  int isDBFile;
 };
 
 /* This variable holds the process id (pid) from when the xRandomness()
@@ -3235,6 +3244,69 @@ static int seekAndRead(unixFile *id, sqlite3_int64 offset, void *pBuf, int cnt){
 }
 
 /*
+** This function is used only in our experiments, for DIRECT IO
+** from the db file. Invoked only for the DB file when
+** USE_DIRECT_IO flag is set.
+*/
+static int seekAndReadDirect(unixFile *pFile, sqlite3_int64 offset, void *pBuf, int cnt) {
+  assert(pFile->isDBFile);
+  void *newBuf;
+  int newOffset;
+  int newCnt;
+  int readCnt;
+
+  if (offset % SQLITE_DEFAULT_PAGE_SIZE != 0 || cnt % SQLITE_DEFAULT_PAGE_SIZE != 0) {
+    if (!(offset == 0 && cnt == 100) && !(offset == 24 && cnt == 16)) {
+      // Not reading the database header or the file change counter,
+      // and read size is not a multiple of page size
+      fprintf(stdout, "Weird read case; Reading cnt=%d at offset=%ld\n", cnt, offset);
+      return -1;
+    }
+  }
+
+  newOffset = offset;
+  newCnt = cnt;
+
+  if (cnt % SQLITE_DEFAULT_PAGE_SIZE != 0) {
+    // Should be reading the header, round up to page size
+    assert(offset == 0 && cnt == 100);
+    newCnt = SQLITE_DEFAULT_PAGE_SIZE;
+  }
+
+  if (offset % SQLITE_DEFAULT_PAGE_SIZE != 0) {
+    // Should be reading file change counter
+    assert(offset == 24 && cnt == 16);
+    newOffset = 0;
+    newCnt = SQLITE_DEFAULT_PAGE_SIZE;
+  }
+
+  if ((sqlite3_int64)pBuf % (4*KB) == 0 && cnt % SQLITE_DEFAULT_PAGE_SIZE == 0) {
+    // The allocated buffer is already aligned, and multiple of page size
+    // Usually means we are reading a page, and offset should be aligned too
+    newBuf = pBuf;
+  } else {
+    // need to assign a new buffer
+    if (posix_memalign(&newBuf, 4*KB, newCnt) != 0) {
+      fprintf(stdout, "posix_memalign failed\n");
+      return -1;
+    }
+  }
+
+  if (lseek(pFile->h, (off_t)newOffset, SEEK_SET) != newOffset) {
+    fprintf(stdout, "Failed lseek to offset %ld\n", newOffset);
+    return -1;
+  } else {
+    readCnt = read(pFile->h, (char*)newBuf, (size_t)newCnt);
+    if ((sqlite3_int64)newBuf != (sqlite3_int64)pBuf) {
+      // need to copy over data to pBuf
+      memcpy(pBuf, newBuf + (offset - newOffset), (cnt < readCnt ? cnt : readCnt));
+      free(newBuf);
+    }
+  }
+  return (cnt < readCnt ? cnt : readCnt);
+}
+
+/*
 ** Read data from a file into a buffer.  Return SQLITE_OK if all
 ** bytes were read successfully and SQLITE_IOERR if anything goes
 ** wrong.
@@ -3277,7 +3349,16 @@ static int unixRead(
   }
 #endif
 
+#if USE_DIRECT_IO
+  if (pFile->isDBFile) {
+    got = seekAndReadDirect(pFile, offset, pBuf, amt);
+  } else {
+    got = seekAndRead(pFile, offset, pBuf, amt);
+  }
+#else
   got = seekAndRead(pFile, offset, pBuf, amt);
+#endif
+
   if( got==amt ){
     return SQLITE_OK;
   }else if( got<0 ){
@@ -3336,6 +3417,61 @@ static int seekAndWriteFd(
   return rc;
 }
 
+static int seekAndWriteFdDirect(
+  int fd,
+  i64 iOff,
+  const void *pBuf,
+  int nBuf,
+  int *piErrno
+){
+  int rc = 0;
+  void *newBuf;
+
+  assert( nBuf==(nBuf&0x1ffff) );
+  assert( fd>2 );
+  assert( piErrno!=0 );
+  nBuf &= 0x1ffff;
+
+  if (iOff % SQLITE_DEFAULT_PAGE_SIZE != 0 || nBuf % SQLITE_DEFAULT_PAGE_SIZE != 0) {
+    fprintf(stdout, "Weird write case, of nData %d at offset %ld\n", nBuf, iOff);
+    rc = -1;
+    goto out;
+  }
+
+  if ((sqlite3_int64)pBuf % (4*KB) == 0) {
+    // Already aligned
+    newBuf = pBuf;
+  } else {
+    if (posix_memalign(&newBuf, 4*KB, nBuf) != 0) {
+      fprintf(stdout, "posix_memalign failed\n");
+      rc = -1;
+      goto out;
+    }
+    memcpy(newBuf, pBuf, nBuf);
+  }
+
+  TIMER_START;
+  if (lseek(fd, iOff, SEEK_SET) != iOff) {
+    fprintf(stdout, "lseek to offset %ld failed\n", iOff );
+    rc = -1;
+    goto out;
+  }
+  do{
+    rc = write(fd, newBuf, nBuf);
+  } while (rc < 0 && errno == EINTR);
+
+  TIMER_END;
+  OSTRACE(("WRITE   %-3d %5d %7lld %llu\n", fd, rc, iOff, TIMER_ELAPSED));
+
+  if (newBuf != pBuf) {
+    free(newBuf);
+  }
+
+  out:
+    if( rc<0 ) *piErrno = errno;
+    return rc;
+}
+
 
 /*
 ** Seek to the offset in id->offset then read cnt bytes into pBuf.
@@ -3345,7 +3481,11 @@ static int seekAndWriteFd(
 ** is set before returning.
 */
 static int seekAndWrite(unixFile *id, i64 offset, const void *pBuf, int cnt){
-  return seekAndWriteFd(id->h, offset, pBuf, cnt, &id->lastErrno);
+  if (id->isDBFile == 1) {
+    return seekAndWriteFdDirect(id->h, offset, pBuf, cnt, &id->lastErrno);
+  } else {
+    return seekAndWriteFd(id->h, offset, pBuf, cnt, &id->lastErrno);
+  }
 }
 
 
@@ -5843,6 +5983,13 @@ static int unixOpen(
 #if defined(__APPLE__) || SQLITE_ENABLE_LOCKING_STYLE
   struct statfs fsInfo;
 #endif
+  int isDBFile = 0;
+
+  /* Check if this is the DB file; check for suffix .db */
+  int nPath = strlen(zPath);
+  if (zPath[nPath-3] == '.' && zPath[nPath-2] == 'd' && zPath[nPath-1] == 'b') {
+    isDBFile = 1;
+  }
 
   /* If creating a master or main-file journal, this function will open
   ** a file-descriptor on the directory too. The first time unixSync()
@@ -5937,6 +6084,9 @@ static int unixOpen(
   if( isReadWrite ) openFlags |= O_RDWR;
   if( isCreate )    openFlags |= O_CREAT;
   if( isExclusive ) openFlags |= (O_EXCL|O_NOFOLLOW);
+#if USE_DIRECT_IO
+  if( isDBFile == 1 ) openFlags |= O_DIRECT;
+#endif
   openFlags |= (O_LARGEFILE|O_BINARY);
 
   if( fd<0 ){
@@ -6074,6 +6224,8 @@ open_finished:
   if( rc!=SQLITE_OK ){
     sqlite3_free(p->pPreallocatedUnused);
   }
+  // Setting here because this flag is overwritten somewhere in this function
+  p->isDBFile = isDBFile;
   return rc;
 }
 
