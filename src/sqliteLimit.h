@@ -105,9 +105,14 @@
 ** which means the cache size is limited to 2048000 bytes of memory.
 ** IMPLEMENTATION-OF: R-48205-43578 The default suggested cache size can be
 ** altered using the SQLITE_DEFAULT_CACHE_SIZE compile-time options.
+**
+** Heuristically setting this to 128 MB
+** For a 64KB page size, we are able to hold (about) 2048 pages in memory
+** In practice, slightly less than 2048 pages can be held, because the page
+** cache allocates some extra space for metadata for each page in memory
 */
 #ifndef SQLITE_DEFAULT_CACHE_SIZE
-# define SQLITE_DEFAULT_CACHE_SIZE  -2000
+# define SQLITE_DEFAULT_CACHE_SIZE  -131072
 #endif
 
 /*
