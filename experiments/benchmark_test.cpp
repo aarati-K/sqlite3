@@ -26,13 +26,11 @@ using namespace std;
 
 char* generate_insert_stmt(int i) {
 	char* temp = "vjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfh";
-	return sqlite3_mprintf(0, "INSERT INTO KV VALUES (%d, '%q');", i, temp);
+	return sqlite3_mprintf("INSERT INTO KV VALUES (%d, '%q');", i, temp);
 }
 
 char* generate_select_stmt(int i) {
-	// char* temp = "vjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfh";
-	// return sqlite3_mprintf(0, "INSERT INTO KV VALUES (%d, '%q');", i, temp);
-	return sqlite3_mprintf(0, "SELECT V FROM KV WHERE K = %d;", i);
+	return sqlite3_mprintf("SELECT V FROM KV WHERE K = %d;", i);
 }
 
 long getTimeDiff(struct timeval startTime, struct timeval endTime) {
