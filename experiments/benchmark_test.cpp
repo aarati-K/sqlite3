@@ -126,6 +126,7 @@ int main() {
 			keys_to_fetch.push_back(key);
 		}
 
+		sqlite3_exec(sqldb, "BEGIN;", 0, 0, 0);
 		time_taken = 0;
 		for (it=keys_to_fetch.begin(); it!=keys_to_fetch.end(); it++) {
 			stmt = generate_select_stmt(*it);
@@ -140,10 +141,10 @@ int main() {
 			time_taken += getTimeDiff(startTime, endTime);
 			sqlite3_free(stmt);
 		}
+		sqlite3_exec(sqldb, "COMMIT;", 0, 0, 0);
 
 		output << time_taken;
 		keys_to_fetch.clear();
-
 	}
 
 	out:
