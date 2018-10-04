@@ -143,7 +143,7 @@ int main() {
 		}
 		sqlite3_exec(sqldb, "COMMIT;", 0, 0, 0);
 
-		output << time_taken;
+		output << time_taken << endl;
 		keys_to_fetch.clear();
 	}
 
