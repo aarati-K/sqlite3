@@ -51,6 +51,12 @@
 #endif
 
 /*
+** Some constants
+*/
+#define KB 1024
+#define MB (KB*KB)
+
+/*
 ** Include the header file used to customize the compiler options for MSVC.
 ** This should be done first so that it can successfully prevent spurious
 ** compiler warnings due to subsequent content in this file and other files

@@ -4425,8 +4425,19 @@ static int pager_write_pagelist(Pager *pPager, PgHdr *pList){
     pPager->dbHintSize = pPager->dbSize;
   }
 
-  while( rc==SQLITE_OK && pList ){
-    Pgno pgno = pList->pgno;
+  void *writeBuf;
+  int writeBufSize = 2*MB;
+  int writeBufSizePgs = writeBufSize/pPager->pageSize;
+  if (posix_memalign(&writeBuf, 4*KB, writeBufSize) != 0) {
+    fprintf(stdout, "posix_memalign failed in pager_write_pagelist\n");
+    return -1;
+  }
+
+  int firstPage, lastPage;
+  firstPage = lastPage = -1;
+
+  while( rc==SQLITE_OK ){
+    Pgno pgno = pList ? pList->pgno : -1;
 
     /* If there are dirty pages in the page cache with page numbers greater
     ** than Pager.dbSize, this means sqlite3PagerTruncateImage() was called to
@@ -4436,45 +4447,75 @@ static int pager_write_pagelist(Pager *pPager, PgHdr *pList){
     ** Also, do not write out any page that has the PGHDR_DONT_WRITE flag
     ** set (set by sqlite3PagerDontWrite()).
     */
-    if( pgno<=pPager->dbSize && 0==(pList->flags&PGHDR_DONT_WRITE) ){
-      i64 offset = (pgno-1)*(i64)pPager->pageSize;   /* Offset to write */
-      char *pData;                                   /* Data to write */    
+    if (firstPage>=1 && (pgno>lastPage+1 || lastPage-firstPage+1>=writeBufSizePgs || pgno==-1)) {
+      /* Current page is not contiguous, commit the current list of pages */
+      i64 offset = (firstPage-1)*(i64)pPager->pageSize;
+      int writeSz = (lastPage-firstPage+1)*pPager->pageSize;
+      rc = sqlite3OsWrite(pPager->fd, writeBuf, writeSz, offset);
 
+      /* If page 1 was just written, update Pager.dbFileVers to match
+      ** the value now stored in the database file. 
+      */
+      if (firstPage==1) {
+          memcpy(&pPager->dbFileVers, &writeBuf[24], sizeof(pPager->dbFileVers));
+      }
+      /* If this write caused the database file to grow, update
+      ** dbFileSize.
+      */
+      if (lastPage>pPager->dbFileSize) {
+          pPager->dbFileSize = lastPage;
+      }
+      pPager->aStat[PAGER_STAT_WRITE] += (lastPage-firstPage+1);
+
+#ifdef SQLITE_TEST
+      sqlite3_pager_writedb_count += (lastPage-firstPage+1);
+#endif
+
+      /* Update any backup objects copying the contents of this pager.
+      ** Should do this, but not necessary for our experiments,
+      */
+      // for (int i=firstPage; i<=lastPage; i++) {
+      //     sqlite3BackupUpdate(pPager->pBackup, i, (u8*)pList->pData);
+      // }
+      assert(pPager->pBackup==NULL);
+      firstPage = lastPage = -1;
+    }
+
+    if (pgno == -1) {
+      /* Reached the end */
+      break;
+    }
+
+    if( pgno<=pPager->dbSize && 0==(pList->flags&PGHDR_DONT_WRITE) ){
       assert( (pList->flags&PGHDR_NEED_SYNC)==0 );
       if( pList->pgno==1 ) pager_write_changecounter(pList);
 
-      /* Encode the database */
-      CODEC2(pPager, pList->pData, pgno, 6, return SQLITE_NOMEM_BKPT, pData);
+      if (pgno == lastPage+1) {
+        lastPage += 1;
+      } else {
+        assert(firstPage==-1);
+        firstPage = lastPage = pgno;
+      }
+      /* Encode the database page */
+      int writeBufOffset = (lastPage-firstPage)*pPager->pageSize;
+      /* CODEC2 macro involves copying data to the buffer in normal operation mode */
+      // CODEC2(pPager, pList->pData, pgno, 6, return SQLITE_NOMEM_BKPT, (char*)(writeBuf + writeBufOffset));
+      memcpy(writeBuf+writeBufOffset, pList->pData, pPager->pageSize);
 
-      /* Write out the page data. */
-      rc = sqlite3OsWrite(pPager->fd, pData, pPager->pageSize, offset);
-
-      /* If page 1 was just written, update Pager.dbFileVers to match
-      ** the value now stored in the database file. If writing this 
-      ** page caused the database file to grow, update dbFileSize. 
+      /* Calling trace functions before the actual store
+      ** Fine for the experiment, but should not do this in general.
       */
-      if( pgno==1 ){
-        memcpy(&pPager->dbFileVers, &pData[24], sizeof(pPager->dbFileVers));
-      }
-      if( pgno>pPager->dbFileSize ){
-        pPager->dbFileSize = pgno;
-      }
-      pPager->aStat[PAGER_STAT_WRITE]++;
-
-      /* Update any backup objects copying the contents of this pager. */
-      sqlite3BackupUpdate(pPager->pBackup, pgno, (u8*)pList->pData);
-
       PAGERTRACE(("STORE %d page %d hash(%08x)\n",
                    PAGERID(pPager), pgno, pager_pagehash(pList)));
       IOTRACE(("PGOUT %p %d\n", pPager, pgno));
-      PAGER_INCR(sqlite3_pager_writedb_count);
-    }else{
+    } else {
       PAGERTRACE(("NOSTORE %d page %d\n", PAGERID(pPager), pgno));
     }
     pager_set_pagehash(pList);
     pList = pList->pDirty;
   }
 
+  free(writeBuf);
   return rc;
 }
 

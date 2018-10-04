@@ -89,8 +89,6 @@
 * For normal operation, should be set to 0
 */
 #define USE_DIRECT_IO 1
-#define KB 1024
-
 /*
 ** standard include files.
 */
@@ -3427,10 +3425,11 @@ static int seekAndWriteFdDirect(
   int rc = 0;
   void *newBuf;
 
-  assert( nBuf==(nBuf&0x1ffff) );
+  /* Removing the constraint that nBuf <= 128*KB for the DB file */
+  // assert( nBuf==(nBuf&0x1ffff) );
   assert( fd>2 );
   assert( piErrno!=0 );
-  nBuf &= 0x1ffff;
+  // nBuf &= 0x1ffff;
 
   if (iOff % SQLITE_DEFAULT_PAGE_SIZE != 0 || nBuf % SQLITE_DEFAULT_PAGE_SIZE != 0) {
     fprintf(stdout, "Weird write case, of nData %d at offset %ld\n", nBuf, iOff);
