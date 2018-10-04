@@ -73,6 +73,12 @@ int main() {
 		keys_present.push_back(i);
 	}
 
+	// Use MEMORY journaling mode
+	rc = sqlite3_exec(sqldb, "PRAGMA journal_mode = MEMORY;", 0, 0, 0);
+	if (rc != SQLITE_OK) {
+		goto out;
+	}
+
 	for(i=0; i<NUM_ITERATIONS; i++) {
 		for (j=0; j<NUM_INSERTIONS_PER_ITERATION; j++) {
 			input >> key;
