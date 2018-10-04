@@ -3315,6 +3315,7 @@ static int unixRead(
   int amt,
   sqlite3_int64 offset
 ){
+  // fprintf(stdout, "Came to unixRead %d\n", offset);
   unixFile *pFile = (unixFile *)id;
   int got;
   assert( id );
@@ -3498,6 +3499,7 @@ static int unixWrite(
   int amt,
   sqlite3_int64 offset 
 ){
+  // fprintf(stdout, "Came to unixWrite offset %d size %d\n", offset, amt);
   unixFile *pFile = (unixFile*)id;
   int wrote = 0;
   assert( id );
