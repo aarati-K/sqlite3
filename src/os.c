@@ -93,6 +93,10 @@ int sqlite3OsWrite(sqlite3_file *id, const void *pBuf, int amt, i64 offset){
   DO_OS_MALLOC_TEST(id);
   return id->pMethods->xWrite(id, pBuf, amt, offset);
 }
+int sqlite3OsWriteBulk(sqlite3_file *id, WriteRequest **requests, int numRequests){
+  DO_OS_MALLOC_TEST(id);
+  return id->pMethods->xWriteBulk(id, requests, numRequests);
+}
 int sqlite3OsTruncate(sqlite3_file *id, i64 size){
   return id->pMethods->xTruncate(id, size);
 }

@@ -675,6 +675,17 @@ struct sqlite3_file {
 };
 
 /*
+** Struct to send multiple write requests using xWriteBulk.
+** This is used exclusively while writing to the DB file.
+*/
+typedef struct WriteRequest WriteRequest;
+struct WriteRequest {
+  int size;
+  sqlite3_int64 offset;
+  void *data;
+};
+
+/*
 ** CAPI3REF: OS Interface File Virtual Methods Object
 **
 ** Every file opened by the [sqlite3_vfs.xOpen] method populates an
@@ -793,6 +804,8 @@ struct sqlite3_io_methods {
   int (*xUnfetch)(sqlite3_file*, sqlite3_int64 iOfst, void *p);
   /* Methods above are valid for version 3 */
   /* Additional methods may be added in future releases */
+  /* Take multiple buffers as input in bulk, default pointer is NULL*/
+  int (*xWriteBulk)(sqlite3_file*, WriteRequest**, int);
 };
 
 /*

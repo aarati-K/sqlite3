@@ -3432,7 +3432,7 @@ static int seekAndWriteFdDirect(
   assert( piErrno!=0 );
   // nBuf &= 0x1ffff;
 
-  if (iOff % SQLITE_DEFAULT_PAGE_SIZE != 0 || nBuf % SQLITE_DEFAULT_PAGE_SIZE != 0) {
+  if (iOff % (SQLITE_DEFAULT_PAGE_SIZE/2) != 0 || nBuf % (SQLITE_DEFAULT_PAGE_SIZE/2) != 0) {
     fprintf(stdout, "Weird write case, of nData %d at offset %ld\n", nBuf, iOff);
     rc = -1;
     goto out;
@@ -3569,6 +3569,42 @@ static int unixWrite(
       storeLastErrno(pFile, 0); /* not a system error */
       return SQLITE_FULL;
     }
+  }
+
+  return SQLITE_OK;
+}
+
+/*
+** Take multiple write requests as input to process.
+*/
+int unixWriteBulk(
+  sqlite3_file *id,
+  WriteRequest **requests,
+  int numRequests
+){
+  unixFile *pFile = (unixFile*)id;
+  int wrote = 0;
+  assert(id);
+  assert(pFile->isDBFile);
+  assert(numRequests>0);
+
+  // Not in DEBUG or MMAP mode. Skipping corresponding code.
+  WriteRequest *curRequest;
+  for  (int i=0; i<numRequests; i++) {
+    curRequest = requests[i];
+    wrote = seekAndWriteFdDirect(
+        pFile->h, curRequest->offset, curRequest->data, curRequest->size, &pFile->lastErrno);
+
+    if (curRequest->size > wrote) {
+      if (write<0 && pFile->lastErrno!=ENOSPC) {
+        return SQLITE_IOERR_WRITE;
+      }else{
+        storeLastErrno(pFile, 0);
+        return SQLITE_FULL;
+      }
+    }
+    free(curRequest->data);
+    free(curRequest);
   }
 
   return SQLITE_OK;
@@ -5294,6 +5330,7 @@ static const sqlite3_io_methods METHOD = {                                   \
    unixShmUnmap,               /* xShmUnmap */                               \
    unixFetch,                  /* xFetch */                                  \
    unixUnfetch,                /* xUnfetch */                                \
+   unixWriteBulk,              /* xWriteBulk */                              \
 };                                                                           \
 static const sqlite3_io_methods *FINDER##Impl(const char *z, unixFile *p){   \
   UNUSED_PARAMETER(z); UNUSED_PARAMETER(p);                                  \

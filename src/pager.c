@@ -4396,6 +4396,9 @@ static int syncJournal(Pager *pPager, int newHdr){
 */
 static int pager_write_pagelist(Pager *pPager, PgHdr *pList){
   int rc = SQLITE_OK;                  /* Return code */
+  int numWriteReqs = 0;
+  int requestsAlloc = 100;
+  WriteRequest **requests = (WriteRequest**)malloc(requestsAlloc*sizeof(WriteRequest*));
 
   /* This function is only called for rollback pagers in WRITER_DBMOD state. */
   assert( !pagerUseWal(pPager) );
@@ -4451,7 +4454,24 @@ static int pager_write_pagelist(Pager *pPager, PgHdr *pList){
       /* Current page is not contiguous, commit the current list of pages */
       i64 offset = (firstPage-1)*(i64)pPager->pageSize;
       int writeSz = (lastPage-firstPage+1)*pPager->pageSize;
-      rc = sqlite3OsWrite(pPager->fd, writeBuf, writeSz, offset);
+      // rc = sqlite3OsWrite(pPager->fd, writeBuf, writeSz, offset);
+      if (numWriteReqs == requestsAlloc) {
+        requestsAlloc += 100;
+        requests = (WriteRequest**)realloc(requests, requestsAlloc*sizeof(WriteRequest*));
+      }
+      WriteRequest *newRequest = (WriteRequest*)malloc(sizeof(WriteRequest));
+      newRequest->offset = offset;
+      newRequest->size = writeSz;
+      // Copy over the data to a new buf
+      void* newBuf;
+      if (posix_memalign(&newBuf, 4*KB, writeSz) != 0) {
+        fprintf(stdout, "posix_memalign failed while creating WriteRequest object\n");
+        return -1;
+      }
+      memcpy(newBuf, writeBuf, writeSz);
+      newRequest->data = newBuf;
+      requests[numWriteReqs] = newRequest;
+      numWriteReqs+=1;
 
       /* If page 1 was just written, update Pager.dbFileVers to match
       ** the value now stored in the database file. 
@@ -4515,6 +4535,9 @@ static int pager_write_pagelist(Pager *pPager, PgHdr *pList){
     pList = pList->pDirty;
   }
 
+  // It is the responsibility of sqlite3OsWriteBulk to free the WriteRequest objects passed
+  // fprintf(stdout, "Calling sqlite3OsWriteBulk numWriteReqs %d\n", numWriteReqs);
+  rc = sqlite3OsWriteBulk(pPager->fd, requests, numWriteReqs);
   free(writeBuf);
   return rc;
 }
