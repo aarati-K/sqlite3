@@ -8,6 +8,7 @@
 #include <ctime>
 #include <vector>
 #include <fstream>
+#include <string>
 #include "../sqlite3.h"
 
 using namespace std;
@@ -20,9 +21,7 @@ using namespace std;
 #define NUM_FETCH_PER_ITERATION 50000
 #define KEY_BASE 10000000
 
-// Change both of these together
-#define NUM_INTERATIONS_PER_TRANSACTION 1
-#define OUTPUT_FILE "/mnt/hdd/record/sqlite3/latency_64kb_bad_1.txt"
+#define OUTPUT_FILE_PREFIX "/mnt/hdd/record/sqlite3/bad/"
 
 char* generate_insert_stmt(int i) {
 	char* temp = "vjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfh";
@@ -38,14 +37,21 @@ long getTimeDiff(struct timeval startTime, struct timeval endTime) {
         (endTime.tv_usec - startTime.tv_usec));
 }
 
-int main() {
+int main(int argc, char** argv) {
+	if (argc != 2) {
+		cout << "Usage ./a.out <num_insertions_per_transaction>" << endl;
+		return 0;
+	}
+
 	sqlite3 *sqldb;
 	ifstream input(INPUT_FILE);
-	ofstream output(OUTPUT_FILE);
+	ofstream output;
+	string output_file_name;
 	unsigned int key;
 	char* stmt;
 	int rc;
 	int insert_count;
+	int num_insertions_per_transaction = stoi(argv[1]);
 	struct timeval startTime, endTime;
 	int i, j, k;
 	long time_taken;
@@ -53,6 +59,9 @@ int main() {
 	vector<int> keys_to_fetch;
 	vector<int> keys_present;
 	vector<int>::iterator it;
+
+	output_file_name = string(OUTPUT_FILE_PREFIX) + string(argv[1]) + string(".txt");
+	output.open(output_file_name);
 
 	if (!input.is_open() || !output.is_open()) {
 		cout << "Could not open input/output file" << endl;
@@ -71,12 +80,6 @@ int main() {
 	// initialize keys_present
 	for (i=0; i<KEY_BASE; i++) {
 		keys_present.push_back(i);
-	}
-
-	// Use MEMORY journaling mode
-	rc = sqlite3_exec(sqldb, "PRAGMA journal_mode = MEMORY;", 0, 0, 0);
-	if (rc != SQLITE_OK) {
-		goto out;
 	}
 
 	for(i=0; i<NUM_ITERATIONS; i++) {
@@ -103,7 +106,7 @@ int main() {
 
 			rc = sqlite3_exec(sqldb, stmt, 0, 0, 0);
 			insert_count += 1;
-			if (insert_count == NUM_INTERATIONS_PER_TRANSACTION) {
+			if (insert_count == num_insertions_per_transaction) {
 				insert_count = 0;
 				rc = sqlite3_exec(sqldb, "COMMIT;", 0, 0, 0);
 				if (rc != SQLITE_OK) {
