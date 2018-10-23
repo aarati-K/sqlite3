@@ -5,7 +5,7 @@ make clean
 make
 cd experiments
 
-declare -a arr=(1 25 50 75 100 125 150)
+declare -a arr=(50000 5000 500 50000)
 
 for i in "${arr[@]}"
 do
