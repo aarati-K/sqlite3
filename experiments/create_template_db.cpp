@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <fstream>
 
-#define DB_NAME "/home/aarati/workspace/sqlite/64kb_template.db"
+#define DB_NAME "/home/aarati/workspace/sqlite/32kb_template.db"
 #define INPUT_FILE "/mnt/hdd/record/sqlite/initial_keys.txt"
 
 using namespace std;

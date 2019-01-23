@@ -12,13 +12,13 @@
 using namespace std;
 
 #define KB 1024L
-#define BT_PGSIZE (64*KB)
+#define BT_PGSIZE (32*KB)
 #define MB (KB*KB)
 #define READ_CHUNK_SIZE (2*MB)
 #define READ_SIZE_IN_PGS (READ_CHUNK_SIZE/BT_PGSIZE)
 
-#define INFILE "/home/aarati/workspace/sqlite/64kb_template.db"
-#define OUTFILE "/home/aarati/workspace/sqlite/64kb_bad_layout.db"
+#define INFILE "/home/aarati/workspace/sqlite/32kb_template.db"
+#define OUTFILE "/home/aarati/workspace/sqlite/32kb_bad_layout.db"
 
 long getTimeDiff(struct timeval startTime, struct timeval endTime) {
     return (long)((endTime.tv_sec - startTime.tv_sec)*1000000 +

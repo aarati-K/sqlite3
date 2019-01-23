@@ -1,3 +1,5 @@
+// g++ benchmark_test.cpp ../sqlite3.o -ldl -lpthread
+
 #include <iostream>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -13,7 +15,7 @@
 
 using namespace std;
 
-#define DB_FILE "/home/aarati/workspace/sqlite/64kb_bad_layout.db"
+#define DB_FILE "/home/aarati/workspace/sqlite/32kb_bad_layout.db"
 #define INPUT_FILE "/mnt/hdd/record/sqlite/initial_keys.txt"
 
 #define NUM_ITERATIONS 100
@@ -21,7 +23,7 @@ using namespace std;
 #define NUM_FETCH_PER_ITERATION 50000
 #define KEY_BASE 10000000
 
-#define OUTPUT_FILE_PREFIX "/mnt/hdd/record/sqlite3/bad/"
+#define OUTPUT_FILE_PREFIX "/mnt/hdd/record/sqlite3/32kb/"
 
 char* generate_insert_stmt(int i) {
 	char* temp = "vjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfhvjdkelanfh";
