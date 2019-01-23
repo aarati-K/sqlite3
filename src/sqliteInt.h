@@ -202,6 +202,9 @@
 #include <inttypes.h>
 #endif
 
+#include <stdio.h>
+#include <stdlib.h>
+
 /*
 ** The following macros are used to cast pointers to integers and
 ** integers to pointers.  The way you do this varies from one compiler
