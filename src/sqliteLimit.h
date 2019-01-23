@@ -120,7 +120,7 @@
 ** checkpointing the database in WAL mode.
 */
 #ifndef SQLITE_DEFAULT_WAL_AUTOCHECKPOINT
-# define SQLITE_DEFAULT_WAL_AUTOCHECKPOINT  1000
+# define SQLITE_DEFAULT_WAL_AUTOCHECKPOINT  1024
 #endif
 
 /*
