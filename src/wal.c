@@ -1903,7 +1903,7 @@ static int walCheckpoint(
         if( iFrame<=nBackfill || iFrame>mxSafeFrame || iDbpage>mxPage ){
           continue;
         }
-        iOffset = walFrameOffset(iFrame, szPage) + WAL_FRAME_HDRSIZE;
+        iOffset = walPageOffset(iFrame, szPage);
         /* testcase( IS_BIG_INT(iOffset) ); // requires a 4GiB WAL file */
         rc = sqlite3OsRead(pWal->pWalFd, zBuf, szPage, iOffset);
         if( rc!=SQLITE_OK ) break;
@@ -3555,9 +3555,10 @@ int sqlite3WalFrames(
   ** journal size limit, if possible.
   */
   if( isCommit && pWal->truncateOnCommit && pWal->mxWalSize>=0 ){
+    fprintf(stdout, "truncateOnCommit set:3558\n");
     i64 sz = pWal->mxWalSize;
-    if( walFrameOffset(iFrame+nExtra+1, szPage)>pWal->mxWalSize ){
-      sz = walFrameOffset(iFrame+nExtra+1, szPage);
+    if( walPageOffset(iFrame+nExtra+1, szPage)>pWal->mxWalSize ){
+      sz = walPageOffset(iFrame+nExtra+1, szPage);
     }
     walLimitSize(pWal, sz);
     pWal->truncateOnCommit = 0;
