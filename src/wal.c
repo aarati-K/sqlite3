@@ -487,6 +487,7 @@ struct Wal {
   u32 minFrame;              /* Ignore wal frames before this one */
   u32 iReCksum;              /* On commit, recalculate checksums from here */
   const char *zWalName;      /* Name of WAL file */
+  const char *zWalHdrName;   /* Name of the headers file */
   u32 nCkpt;                 /* Checkpoint sequence counter in the wal-header */
 #ifdef SQLITE_DEBUG
   u8 lockError;              /* True if a locking error has occurred */
@@ -1402,9 +1403,10 @@ int sqlite3WalOpen(
     pRet->readOnly = WAL_RDONLY;
   }
 
-  // HACK: Hardcoding the file name
-  fprintf(stdout, "Opening wal file %s\n", zWalName);
-  char* zHdrsFName = "32kb_bad_layout.db-wal-hdrs";
+  char* zHdrsFName = (char*)sqlite3MallocZero(strlen(zWalName) + 6);
+  strcpy(zHdrsFName, zWalName);
+  strcpy(zHdrsFName+strlen(zWalName), "-hdrs");
+  pRet->zWalHdrName = zHdrsFName;
   rc = sqlite3OsOpen(pVfs, zHdrsFName, pRet->pWalHdrsFd, flags, &flags);
 
   if( rc!=SQLITE_OK ){
@@ -2056,6 +2058,7 @@ int sqlite3WalClose(
     if( isDelete ){
       sqlite3BeginBenignMalloc();
       sqlite3OsDelete(pWal->pVfs, pWal->zWalName, 0);
+      sqlite3OsDelete(pWal->pVfs, pWal->zWalHdrName, 0);
       sqlite3EndBenignMalloc();
     }
     WALTRACE(("WAL%p: closed\n", pWal));
